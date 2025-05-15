@@ -43,7 +43,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.tree.command(name='запитати', description='Поставити запитання магічній кулі')
 @discord.app_commands.describe(question="Текст вашого запитання")
-async def ask_magic_ball(interaction: discord.Interaction, question: discord.app_commands.Range[str, 1, 50]):
+async def ask_magic_ball(interaction: discord.Interaction, question: discord.app_commands.Range[str, 1, 100]):
     await interaction.response.defer()
 
     animation_frames = [
