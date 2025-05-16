@@ -1,14 +1,12 @@
 import discord
 from discord.ext import commands
-from mistralai import Mistral
 import asyncio
+import aiohttp
 import logging
 from config import *
 
 intents = discord.Intents.default()
 intents.message_content = True
-
-client = Mistral(api_key=API_TOKEN_MISTRAL)
 
 # базова конфігурація логера
 logging.basicConfig(
@@ -19,25 +17,30 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-def questionfunc(text):
-    completion = client.chat.complete(
-    model=model,
-    messages=[
-        {
-            "role": "system",
-            "content": prompt
+async def questionfunc(text):
 
-        },
-        {
-            "role": "user",
-            "content": f"{text}"
+    headers = {
+        "Authorization": f"Bearer {API_TOKEN_MISTRAL}",
+        "Content-Type": "application/json"
         }
-    ],
-    max_tokens=40,
-    temperature=0.9
-    )
 
-    return completion.choices[0].message.content
+    data = {
+        "model": "mistral-large-latest",
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": text}
+        ],
+    "max_tokens": 100,
+    "temperature": 0.9
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api.mistral.ai/v1/chat/completions", headers=headers, json=data) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                raise Exception(f"ошибка: {resp.status}, {text}")
+            data = await resp.json()
+            return data["choices"][0]["message"]["content"]
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -57,8 +60,7 @@ async def ask_magic_ball(interaction: discord.Interaction, question: discord.app
         await asyncio.sleep(0.1)  # пауза між кадрами
 
     try:
-        response = await asyncio.to_thread(questionfunc, question)
-
+        response = await questionfunc(question)
         if response == question:
             raise Exception
     except Exception as e:
@@ -67,7 +69,7 @@ async def ask_magic_ball(interaction: discord.Interaction, question: discord.app
         logging.error(f"Магічна куля не дала відповіді. Питання: {question}")
         return
 
-    logging.info(f"!!!! Хтось звернувся до магічної кулі. Питання: {question}, відповідь: {response}")
+    logging.info(f"!!!! {interaction.user.name} звернувся до магічної кулі на сервері {interaction.guild.name} ({interaction.guild.id}). Питання: {question}, відповідь: {response}")
     await interaction.edit_original_response(content=f"**{question}**\n🔮 Магічна куля відповідає: `{response}`"
     )
 
