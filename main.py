@@ -44,30 +44,43 @@ async def questionfunc(text):
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+animation_frames = [
+    "🔮 Магічна куля думає.",
+    "🔮 Магічна куля думає..",
+    "🔮 Магічна куля думає...",
+]
+
+async def animate_thinking(interaction):
+    while True:
+        for frame in animation_frames:
+            await interaction.edit_original_response(content=frame)
+            await asyncio.sleep(0.2)
+
+
 @bot.tree.command(name='запитати', description='Поставити запитання магічній кулі')
 @discord.app_commands.describe(question="Текст вашого запитання")
 async def ask_magic_ball(interaction: discord.Interaction, question: discord.app_commands.Range[str, 1, 100]):
     await interaction.response.defer()
 
-    animation_frames = [
-        "🔮 Магічна куля думає.",
-        "🔮 Магічна куля думає..",
-        "🔮 Магічна куля думає...",
-    ]
-
-    for frame in animation_frames:
-        await interaction.edit_original_response(content=frame)
-        await asyncio.sleep(0.1)  # пауза між кадрами
+    animation_task = asyncio.create_task(animate_thinking(interaction))
 
     try:
         response = await questionfunc(question)
         if response == question:
             raise Exception
+
     except Exception as e:
         print(e)
         await interaction.edit_original_response(content=f"На жаль, на зараз духи не виходять на зв'язок :(")
         logging.error(f"Магічна куля не дала відповіді. Питання: {question}")
         return
+
+    finally:
+        animation_task.cancel()
+        try:
+            await animation_task
+        except asyncio.CancelledError:
+            pass
 
     logging.info(f"!!!! {interaction.user.name} звернувся до магічної кулі на сервері {interaction.guild.name} ({interaction.guild.id}). Питання: {question}, відповідь: {response}")
     await interaction.edit_original_response(content=f"**{question}**\n🔮 Магічна куля відповідає: `{response}`"
