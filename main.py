@@ -4,6 +4,12 @@ import asyncio
 import aiohttp
 import logging
 from config import *
+from collections import defaultdict
+from datetime import datetime, timedelta
+
+user_timestamps = defaultdict(list)
+LIMIT = 2  # максимум запитів
+WINDOW = timedelta(minutes=1)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -50,19 +56,36 @@ animation_frames = [
     "🔮 Магічна куля думає...",
 ]
 
-async def animate_thinking(interaction):
-    while True:
+async def animate_thinking(interaction, stop_event: asyncio.Event):
+    while not stop_event.is_set():
         for frame in animation_frames:
+            if stop_event.is_set():
+                return
             await interaction.edit_original_response(content=frame)
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.6)
 
 
 @bot.tree.command(name='запитати', description='Поставити запитання магічній кулі')
 @discord.app_commands.describe(question="Текст вашого запитання")
 async def ask_magic_ball(interaction: discord.Interaction, question: discord.app_commands.Range[str, 1, 100]):
+    user_id = interaction.user.id
+    now = datetime.utcnow()
+
+    # очищаємо старі запити
+    user_timestamps[user_id] = [
+        t for t in user_timestamps[user_id] if now - t < WINDOW
+    ]
+
+    if len(user_timestamps[user_id]) >= LIMIT:
+        await interaction.response.send_message("Магічна куля перевантажена твоїми запитами! Їй треба охолодитись.", ephemeral=True)
+        return
+
+    user_timestamps[user_id].append(now)
+
     await interaction.response.defer()
 
-    animation_task = asyncio.create_task(animate_thinking(interaction))
+    stop_event = asyncio.Event()
+    animation_task = asyncio.create_task(animate_thinking(interaction, stop_event))
 
     try:
         response = await questionfunc(question)
@@ -76,6 +99,7 @@ async def ask_magic_ball(interaction: discord.Interaction, question: discord.app
         return
 
     finally:
+        stop_event.set()
         animation_task.cancel()
         try:
             await animation_task
