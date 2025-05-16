@@ -88,9 +88,14 @@ async def ask_magic_ball(interaction: discord.Interaction, question: discord.app
     animation_task = asyncio.create_task(animate_thinking(interaction, stop_event))
 
     try:
-        response = await questionfunc(question)
+        response = await asyncio.wait_for(questionfunc(question), timeout=20)
         if response == question:
             raise Exception
+
+    except asyncio.TimeoutError:
+        await interaction.edit_original_response(content="Ой-ой... чомусь відповідь від духів так і не надійшла...")
+        logging.error(f"Таймаут відповіді. Питання: {question}")
+        return
 
     except Exception as e:
         print(e)
